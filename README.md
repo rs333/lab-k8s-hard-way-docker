@@ -49,8 +49,52 @@ for i in {1..3};do
 done
 ```
 
-**Access masters and workers** using `docker exec -it` instead of `ssh`
-to access these systems.
+**Note the IP addresses of all the nodes (masters and workers)** which
+will be needed when creating the certificates.
+
+```bash
+mapfile -t names < <(d ps --format '{{.Names}}')
+for n in "${names[@]}"; do
+  echo -n "$n "
+  d inspect --format '{{json .}}' $n \
+    | jq -r '.NetworkSettings.Networks[].IPAddress'
+done
+```
+
+**Test access to masters and workers** using `docker exec -it` instead
+of `ssh` to access these systems.
+
+```bash
+docker exec -it worker-1 bash
+```
+
+Should dump you onto a prompt:
+
+```
+root@worker-1:/#
+```
+
+**Provision a Certificate Authority** using the original, standard,
+ubiquitous `openssl` tool (there are others you can learn later).
+
+**Generate CA key** which will be used to create and sign all the other
+keys and create certificates.
+
+```bash
+openssl genrsa -o ca.key 2048
+```
+
+**Generate CA X.509 certificate** from the key. `req` is from the
+term Certificate Signing Request (CSR). We'll use 10,000 days since we
+don't need to worry about certificates expiring, but in real scenarios
+you should setup a reminder immediately for before the cert expires to
+be sure it gets replaced before then (or very bad things will happen).
+
+```bash
+openssl req -x509 
+```
+
+
 
 ## Next Steps
 

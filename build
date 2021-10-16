@@ -44,11 +44,23 @@ x.workers.rm() {
   done
 }
 
-
 x.masternodes.rm() {
   for i in {1..3};do
     docker rm -f control-$i 
   done
+}
+
+x.ips() {
+  mapfile -t names < <(d ps --format '{{.Names}}')
+  for n in "${names[@]}"; do
+    echo -n "$n "
+    d inspect --format '{{json .}}' $n \
+      | jq -r '.NetworkSettings.Networks[].IPAddress'
+  done
+}
+
+x.gencerts() {
+  openssl genrsa -o ca.key 2048
 }
 
 ############################## BOILERPLATE ###########################
