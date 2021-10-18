@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-for image in base control worker; do 
+for image in base single control worker; do 
   cd $image
   ./build
   cd -

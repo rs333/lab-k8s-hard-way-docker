@@ -2,7 +2,7 @@ ARG BASE_IMAGE=ubuntu
 FROM $BASE_IMAGE
 
 LABEL MAINTAINER "Rob Muhlestein <rob@rwx.gg>"
-LABEL SOURCE "https://github.com/rwxrob/lab-k8s-hard-docker"
+LABEL SOURCE "https://github.com/rwxrob/lab-k8s-hard-way-docker"
 
 ENV DEBIAN_FRONTEND=noninteractive
 
@@ -20,7 +20,7 @@ RUN curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /
 RUN echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
 
 RUN apt-get update -y && \
-    apt-get -y install docker-ce docker-ce-cli containerd.io
+    apt-get -y install docker-ce
 
 # ------------------ install kubelet kubeadm kubectl -----------------
 
