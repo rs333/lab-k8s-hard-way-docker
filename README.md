@@ -16,6 +16,16 @@ networks and even data centers.
 > This Docker approach is the similar to the approach both Kind and
 > Minikube use, but without the magic leaving that for you you to learn.
 
+## First By Hand, Then Create Dockerfile
+
+The suggested way to work through these steps is to do all the
+individual tasks one at a time without scripting them at all. This
+includes typing out things like `/etc/apt/source.list.d` entries by hand
+so that you can internalize what is in them. Later, you should go back
+and create your own Dockerfiles for the images that optimize the steps
+that you did by hand. After all, this is how Docker was designed to be
+used, each step creates an overlay.
+
 ## Overview
 
 We take a phased, repetitive approach, adding complexity on each
@@ -56,6 +66,12 @@ Make sure you can connect to it.
 docker exec -it single bash
 ```
 
+> 💬
+> Consider that the login step would normally be done with ssh if this
+> Node where a real machine. We use
+`docker exec -it` instead because our host is a container (and not
+a machine).
+
 We will need to turn this into more of an actual host than is available
 from just a container. Let's install some tools we will need. 
 
@@ -74,58 +90,82 @@ Now let's get `vim` and the package necessary to do installation:
 apt install vim-tiny curl gnupg
 ```
 
-Now we are ready to install all the control-plane components:
+Now we are ready to install the three components of any Kubernetes Node:
 
 1. Container Engine (Docker)
 1. Kubelet
 1. KubeProxy
 
-Let's start with the container engine (Docker). Even though we will be
-cheating and using the docker engine running on system by mounting
-`/var/run/docker.sock` we still need the `docker` command. There are
-many ways to get this, but let's use the official docker package
-archive.
+These logical components are fulfilled by install the following packages:
 
-We'll need to get the public key from docker.
+1. `docker-ce`
+1. `kubeadm`
+1. `kubectl`
+1. `kubelet`
+
+Let's start with the container engine (Docker). Even though we will be
+cheating and using the docker engine running on our workstation by
+mounting `/var/run/docker.sock` we still need the `docker` command.
+There are many ways to get this, but let's use the official docker
+package archive (`docker-ce`).
+
+We'll authorize this package archive source by hand in a way that is compatible with Debian and Ubuntu. 
+
+First, let's get the public key from docker (which is only available as
+an ascii-armored text file).
 
 ```
 curl -sSL -o /tmp/docker.pub https://download.docker.com/linux/ubuntu/gpg
 ```
 
-Now we can turn it back into a binary file.
+Now we can convert the text file into a binary key file.
 
 ```
 gpg --dearmor /tmp/docker.pub
 ```
 
-And add it to the keyrings that the `apt` command uses. Note that the
-`.gpg` suffix was added by `--dearmor`.
+For `apt` to see this key we need to add it to `/usr/share/keyrings` and
+we'll keep with the naming conventions used for other "keyrings" even
+though this is really just a single key.
 
 ```
 mv /tmp/docker.pub.gpg /usr/share/keyrings/docker-archive-keyring.gpg
 ```
 
-Now we have to add the docker package archive to our list of approved
-`apt` archive sources. You could add the following directly to
-`/etc/apt/sources.list` but it is probably better to add a file to the
-`/etc/apt/sources.list.d` directory instead. Change the following to
-match your architecture and release. When in doubt, open the
-`/etc/apt.sources.list` file to see what should be in yours (or use
-`dpkg --print-architecture`). You can edit the file directly with `vi`
-(`vim`) or just `echo` it to the file with a redirect.
+Now we can add the docker package archive to our list of approved `apt`
+archive sources. Normally, you should add a `docker.list` file to the
+`/etc/apt/sources.list.d` directory, but we'll go ahead and just add it
+directly to `/etc/apt/sources.list` for now. Add the following line. You
+can use `vi` directly or `echo` with a redirect, but careful not to blow
+it away:
 
 ```
-deb [arch=amd64 signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu focal stable
+deb [signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu focal stable
 ```
 
-Now just update your apt repository cache and install Docker Community
-Edition. (Note that `docker-cd-cli` and `containerd.io` packages will
-also be installed with `docker-cd`.)
+Make sure `focal` and `stable` match your release. When in doubt you can
+open the web page at <https://download.docker.com/linux/ubuntu> to get
+hints about what is available. The `dpkg --print-architecture` command
+can also help. 
+
+> 💡
+> Adding a source list directly in this way is 100% compatible with
+> Debian as well as Ubuntu and saves you from the extra bloat and
+> dependency on `apt-add-repo` (which is only support on Ubuntu). It
+> pays to know the Debian way of doing things.
+
+Now just update your apt repository cache and install the `docker-ce`
+package for Docker Community Edition. 
 
 ```
 apt update
-apt -y install docker-ce docker-ce-cli containerd.io
+apt -y install docker-ce
 ```
+
+> ⚠️
+> Note that the <kubernetes.io> documentation calls for `docker-ce-cli`
+> and `containerd.io` packages, which is incorrect since they will also
+> be installed with `docker-ce`.
 
 Take your new `docker` command for spin to test it out.
 
@@ -133,7 +173,7 @@ Take your new `docker` command for spin to test it out.
 docker version
 ```
 
-Note the error is produces.
+Note the error is produces at the bottom.
 
 ```
 docker version
@@ -149,17 +189,19 @@ Client: Docker Engine - Community
 Cannot connect to the Docker daemon at unix:///var/run/docker.sock. Is the docker daemon running?
 ```
 
-To get around this we will exit, stop, and remove our container and
-restart it with the volume mount connecting the `/var/run/docker.sock`
-of the host machine. This is a regular practice to allow accessing the
-same docker runtime engine from containers as the host of the
-containers.
+To get around this error we will exit, stop, and remove our container
+creating a new one with a new `run` command and the volume mount
+connecting the `/var/run/docker.sock` of the host machine. This is
+a regular practice to allow accessing the same docker runtime engine
+from containers as the host of the containers.
 
-> 🛑This will completely discard all the work you have done so far. So
-> you will have to repeat all the previous steps (which is probably best
-> to practice them). Make sure you write everything down (or just go
-> back in this document). If you wish (and know how), you can begin to
-> create your own Dockerfile image and start using that instead.
+> 🛑
+> This will completely discard all the work you have done so far. So
+> you will have to repeat all the previous steps. This is
+> intentional. You need the practice. This time try to do them all
+> without looking at your notes too much. You did take notes, right? If
+> you wish (and know how), you can begin to create your own Dockerfile
+> image with notes and start using that instead.
 
 ```
 exit
@@ -174,16 +216,119 @@ You can see from the `inspect` output that a new volume has been bound.
 docker inspect single |jq '.[0].Mounts'
 ```
 
-After you have repeated all the steps to get `docker-ce` installed you
-can try `docker ps` and should see your host machine container running
-(yes, even though you are actually in it).
+Now "login" to your node again.
 
 ```
+docker exec -it single bash
+```
+
+Your test of `docker` should now work. Keep in mind the output will look
+exactly like it did when you were not logged in because the `docker`
+inside the container is using exactly the same `docker` as you installed
+on your workstation. This is intentional.
+
+```
+docker version
+docker ps
+```
+
+Your output should look something like this:
+
+```
+Client: Docker Engine - Community
+ Version:           20.10.9
+ API version:       1.41
+ Go version:        go1.16.8
+ Git commit:        c2ea9bc
+ Built:             Mon Oct  4 16:08:29 2021
+ OS/Arch:           linux/amd64
+ Context:           default
+ Experimental:      true
+
+Server:
+ Engine:
+  Version:          20.10.7
+  API version:      1.41 (minimum version 1.12)
+  Go version:       go1.13.8
+  Git commit:       20.10.7-0ubuntu1~21.04.1
+  Built:            Wed Aug  4 12:24:19 2021
+  OS/Arch:          linux/amd64
+  Experimental:     false
+ containerd:
+  Version:          1.5.2-0ubuntu1~21.04.2
+  GitCommit:        
+ runc:
+  Version:          1.0.0~rc95-0ubuntu1~21.04.2
+  GitCommit:        
+ docker-init:
+  Version:          0.19.0
+  GitCommit:        
+
 CONTAINER ID   IMAGE     COMMAND   CREATED          STATUS          PORTS     NAMES
-54348c3700aa   ubuntu    "bash"    26 minutes ago   Up 26 minutes             single
+08864d48d710   ubuntu    "bash"    54 minutes ago   Up 54 minutes             single
 ```
 
-Huzzah! Docker is not installed. On to Kubelet.
+Huzzah! Docker is now installed on the node. 
+
+> 💬
+> Note that the <kubernetes.io> site does not include the container
+> runtime engine in the diagram describing the essential components of
+> a Kubernetes Node. This is probably because the container engine is
+> technically not a part of Kubernetes itself, but a primary dependency
+> for Kubernetes. In other words, you could always login to your Node
+> and just use docker on it as if it were any other system with docker
+> installed. 
+> 
+> In fact, even though it is a very bad practice, cloud-native admins
+> will sometimes login to a Node machine just to use docker to
+> trouble-shoot --- or worse --- to build images when they are too lazy
+> to build them on their own workstations. Keep in mind, doing this is
+> *very* risky since any mistake could leave Kubernetes and the Kubelet
+> in a unusable state. 
+>
+> Hackers target the Docker scope issue to gain access to the underlying
+> system by breaking out of Kubernetes and gaining access to the
+> underlying host system, which is why the Docker engine should *never*
+> run as root. Currently, this is the most popular attack vector against
+> Kubernetes.
+
+Okay, now we need to install the Kubernetes specific stuff: `kubeadm`,
+`kubectl`, and `kubelet`. We'll use similar steps to those to add the
+Docker apt repo to our source list.
+
+Change into the keyrings directory.
+
+```
+cd /usr/share/keyrings
+```
+
+Now we `curl` down the binary directly from `https:
+//packages.cloud.google.com` (which is organized quite differently than
+Docker). The `-O` keeps the original name
+
+```
+curl -sSL https://packages.cloud.google.com/apt/doc/apt-key.gpg -O
+mv apt-key kubernetes-archive-keyring.gpg
+```
+
+Now for then entry in `/etc/apt/sources.list`. Add this however you want.
+
+```
+deb [signed-by=/usr/share/keyrings/kubernetes-archive-keyring.gpg] https://apt.kubernetes.io/ kubernetes-xenial main
+```
+
+Keep `kubernetes-xenial` for now. (I'm not quite sure on the naming
+conventions, but this is from the standard docs.)
+
+Don't forget to `apt update` after this. Then you can install everything
+you need in one command.
+
+```
+apt update
+apt install kubeadm kubectl kubelet
+```
+
+
 
 ----
 
