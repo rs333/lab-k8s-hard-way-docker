@@ -163,9 +163,10 @@ apt -y install docker-ce
 ```
 
 > ⚠️
-> Note that the <kubernetes.io> documentation calls for `docker-ce-cli`
+> Note that the kubernetes.io documentation calls for `docker-ce-cli`
 > and `containerd.io` packages, which is incorrect since they will also
 > be installed with `docker-ce`.
+
 
 Take your new `docker` command for spin to test it out.
 
@@ -271,13 +272,13 @@ CONTAINER ID   IMAGE     COMMAND   CREATED          STATUS          PORTS     NA
 Huzzah! Docker is now installed on the node. 
 
 > 💬
-> Note that the <kubernetes.io> site does not include the container
-> runtime engine in the diagram describing the essential components of
-> a Kubernetes Node. This is probably because the container engine is
-> technically not a part of Kubernetes itself, but a primary dependency
-> for Kubernetes. In other words, you could always login to your Node
-> and just use docker on it as if it were any other system with docker
-> installed. 
+> Note that the [kubernetes.io][node-components] site does not include
+> the container runtime engine in the diagram describing the essential
+> components of a Kubernetes Node. This is probably because the
+> container engine is technically not a part of Kubernetes itself, but a
+> primary dependency for Kubernetes. In other words, you could always
+> login to your Node and just use docker on it as if it were any other
+> system with docker installed. 
 > 
 > In fact, even though it is a very bad practice, cloud-native admins
 > will sometimes login to a Node machine just to use docker to
@@ -291,6 +292,8 @@ Huzzah! Docker is now installed on the node.
 > underlying host system, which is why the Docker engine should *never*
 > run as root. Currently, this is the most popular attack vector against
 > Kubernetes.
+
+[node-components]: <https://kubernetes.io/docs/concepts/overview/components/>
 
 Okay, now we need to install the Kubernetes specific stuff: `kubeadm`,
 `kubectl`, and `kubelet`. We'll use similar steps to those to add the
